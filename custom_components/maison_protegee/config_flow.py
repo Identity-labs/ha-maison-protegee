@@ -38,7 +38,7 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     @staticmethod
-    async def async_get_options_flow(
+    def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> MaisonProtegeeOptionsFlowHandler:
         """Get the options flow for this handler."""
