@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 import logging
 from typing import Any
 
@@ -52,7 +53,7 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=30,
+            update_interval=timedelta(seconds=30),
         )
         self.api = api
 
