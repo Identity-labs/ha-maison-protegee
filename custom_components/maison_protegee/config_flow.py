@@ -53,6 +53,15 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_USERNAME])
             self._abort_if_unique_id_configured()
 
+            existing_entries = self.hass.config_entries.async_entries(DOMAIN)
+            for entry in existing_entries:
+                if entry.data.get(CONF_USERNAME) == user_input[CONF_USERNAME]:
+                    if entry.entry_id in self.hass.data.get(DOMAIN, {}):
+                        entry_data = self.hass.data[DOMAIN][entry.entry_id]
+                        if "api" in entry_data:
+                            await entry_data["api"].async_logout()
+                    break
+
             session = aiohttp.ClientSession()
             try:
                 api = MaisonProtegeeAPI(
@@ -116,6 +125,11 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
                 if not password_to_use:
                     errors["base"] = "password_required"
                 else:
+                    if config_entry.entry_id in self.hass.data.get(DOMAIN, {}):
+                        entry_data = self.hass.data[DOMAIN][config_entry.entry_id]
+                        if "api" in entry_data:
+                            await entry_data["api"].async_logout()
+
                     session = aiohttp.ClientSession()
                     try:
                         api = MaisonProtegeeAPI(
