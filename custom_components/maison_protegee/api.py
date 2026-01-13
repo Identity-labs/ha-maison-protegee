@@ -317,12 +317,14 @@ class MaisonProtegeeAPI:
             headers = {
                 "User-Agent": "Mozilla/5.0 (compatible; HomeAssistant)",
             }
+            
+            temperature_timeout = aiohttp.ClientTimeout(total=180)
 
             _LOGGER.debug("Fetching temperatures from %s", TEMPERATURES_URL)
             async with self.session.get(
                 TEMPERATURES_URL,
                 headers=headers,
-                timeout=self._timeout,
+                timeout=temperature_timeout,
                 allow_redirects=False,
             ) as response:
                 _LOGGER.debug("Temperatures response: %s", response.status)
@@ -336,7 +338,7 @@ class MaisonProtegeeAPI:
                     async with self.session.get(
                         TEMPERATURES_URL,
                         headers=headers,
-                        timeout=self._timeout,
+                        timeout=temperature_timeout,
                         allow_redirects=False,
                     ) as retry_response:
                         if retry_response.status == 302:
@@ -355,7 +357,7 @@ class MaisonProtegeeAPI:
                     async with self.session.get(
                         TEMPERATURES_URL,
                         headers=headers,
-                        timeout=self._timeout,
+                        timeout=temperature_timeout,
                         allow_redirects=False,
                     ) as retry_response:
                         retry_response.raise_for_status()
