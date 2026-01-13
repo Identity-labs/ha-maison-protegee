@@ -23,7 +23,8 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    api: MaisonProtegeeAPI = hass.data[DOMAIN][entry.entry_id]
+    entry_data = hass.data[DOMAIN][entry.entry_id]
+    api: MaisonProtegeeAPI = entry_data["api"]
 
     coordinator = MaisonProtegeeCoordinator(hass, api)
     await coordinator.async_config_entry_first_refresh()
