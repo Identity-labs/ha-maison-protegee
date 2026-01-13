@@ -349,9 +349,10 @@ class MaisonProtegeeAPI:
         soup = BeautifulSoup(html, "html.parser")
         temperatures: dict[str, Any] = {}
 
-        table = soup.find("table", class_="table")
+        table = soup.find("table", class_=lambda x: x and "table" in x if x else False)
         if not table:
             _LOGGER.warning("Temperature table not found in HTML")
+            _LOGGER.debug("HTML snippet (first 500 chars): %s", html[:500])
             return temperatures
 
         tbody = table.find("tbody")
@@ -360,25 +361,44 @@ class MaisonProtegeeAPI:
             return temperatures
 
         rows = tbody.find_all("tr")
+        _LOGGER.debug("Found %d temperature rows", len(rows))
+        
+        if not rows:
+            _LOGGER.warning("No temperature rows found in table")
+            return temperatures
+
         for row in rows:
             cells = row.find_all("td")
             if len(cells) >= 2:
                 room_name = cells[0].get_text(strip=True)
                 temp_cell = cells[1]
+                
+                sup_tag = temp_cell.find("sup")
+                if sup_tag:
+                    sup_tag.decompose()
+                
                 temp_text = temp_cell.get_text(strip=True)
                 
+                if not room_name or not temp_text:
+                    _LOGGER.debug("Skipping row with empty room_name or temp_text")
+                    continue
+                
                 try:
-                    temp_value = float(temp_text.replace("°C", "").strip())
-                    sensor_id = room_name.lower().replace(" ", "_").replace("é", "e")
+                    temp_value_str = temp_text.replace("°C", "").replace("°", "").strip()
+                    temp_value = float(temp_value_str)
+                    sensor_id = room_name.lower().replace(" ", "_").replace("é", "e").replace("&eacute;", "e")
                     temperatures[sensor_id] = {
                         "name": room_name,
                         "value": temp_value,
                         "unit": "°C",
                     }
                     _LOGGER.debug("Found temperature: %s = %s°C", room_name, temp_value)
-                except ValueError:
-                    _LOGGER.warning("Could not parse temperature value: %s", temp_text)
+                except ValueError as err:
+                    _LOGGER.warning("Could not parse temperature value '%s' for room '%s': %s", temp_text, room_name, err)
 
+        if not temperatures:
+            _LOGGER.warning("No temperatures parsed from HTML. Table structure: %s", table.prettify()[:500])
+        
         return temperatures
 
     async def async_get_events(self, days: int = 30) -> list[dict[str, Any]] | None:

@@ -105,33 +105,39 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            session = aiohttp.ClientSession()
-            try:
-                api = MaisonProtegeeAPI(
-                    user_input[CONF_USERNAME],
-                    user_input[CONF_PASSWORD],
-                    session,
-                )
-
-                auth_result = await api.async_authenticate()
-                if auth_result:
-                    await session.close()
-                    hass = self.hass
-                    hass.config_entries.async_update_entry(
-                        self.config_entry,
-                        data=user_input,
+            password = user_input.get(CONF_PASSWORD, "").strip()
+            if not password:
+                password = self.config_entry.data.get(CONF_PASSWORD)
+            
+            if not password:
+                errors["base"] = "password_required"
+            else:
+                session = aiohttp.ClientSession()
+                try:
+                    api = MaisonProtegeeAPI(
+                        user_input[CONF_USERNAME],
+                        password,
+                        session,
                     )
-                    await hass.config_entries.async_reload(self.config_entry.entry_id)
-                    return self.async_create_entry(title="", data={})
-                errors["base"] = "invalid_auth"
-            except aiohttp.ClientError as err:
-                _LOGGER.exception("Connection error during authentication: %s", err)
-                errors["base"] = "cannot_connect"
-            except Exception as err:
-                _LOGGER.exception("Unexpected exception during authentication: %s", err)
-                errors["base"] = "unknown"
-            finally:
-                await session.close()
+
+                    auth_result = await api.async_authenticate()
+                    if auth_result:
+                        await session.close()
+                        updated_data = dict(self.config_entry.data)
+                        updated_data[CONF_USERNAME] = user_input[CONF_USERNAME]
+                        updated_data[CONF_PASSWORD] = password
+                        updated_data[CONF_ENABLE_TEMPERATURES] = user_input.get(CONF_ENABLE_TEMPERATURES, True)
+                        updated_data[CONF_ENABLE_EVENTS] = user_input.get(CONF_ENABLE_EVENTS, True)
+                        return self.async_create_entry(data=updated_data)
+                    errors["base"] = "invalid_auth"
+                except aiohttp.ClientError as err:
+                    _LOGGER.exception("Connection error during authentication: %s", err)
+                    errors["base"] = "cannot_connect"
+                except Exception as err:
+                    _LOGGER.exception("Unexpected exception during authentication: %s", err)
+                    errors["base"] = "unknown"
+                finally:
+                    await session.close()
 
         return self.async_show_form(
             step_id="init",
@@ -141,7 +147,11 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
                         CONF_USERNAME,
                         default=self.config_entry.data.get(CONF_USERNAME),
                     ): str,
-                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(
+                        CONF_PASSWORD,
+                        default="",
+                        description="Leave empty to keep current password",
+                    ): str,
                     vol.Optional(
                         CONF_ENABLE_TEMPERATURES,
                         default=self.config_entry.data.get(
