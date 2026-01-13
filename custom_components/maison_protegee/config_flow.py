@@ -94,20 +94,17 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
     """Handle options flow for Maison Protegee."""
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.config_entry = config_entry
-
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage the options."""
         errors: dict[str, str] = {}
+        config_entry = self.config_entry
 
         if user_input is not None:
             password = user_input.get(CONF_PASSWORD, "").strip()
             if not password:
-                password = self.config_entry.data.get(CONF_PASSWORD)
+                password = config_entry.data.get(CONF_PASSWORD)
             
             if not password:
                 errors["base"] = "password_required"
@@ -123,7 +120,7 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
                     auth_result = await api.async_authenticate()
                     if auth_result:
                         await session.close()
-                        updated_data = dict(self.config_entry.data)
+                        updated_data = dict(config_entry.data)
                         updated_data[CONF_USERNAME] = user_input[CONF_USERNAME]
                         updated_data[CONF_PASSWORD] = password
                         updated_data[CONF_ENABLE_TEMPERATURES] = user_input.get(CONF_ENABLE_TEMPERATURES, True)
@@ -145,7 +142,7 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         CONF_USERNAME,
-                        default=self.config_entry.data.get(CONF_USERNAME),
+                        default=config_entry.data.get(CONF_USERNAME),
                     ): str,
                     vol.Optional(
                         CONF_PASSWORD,
@@ -154,13 +151,13 @@ class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
                     ): str,
                     vol.Optional(
                         CONF_ENABLE_TEMPERATURES,
-                        default=self.config_entry.data.get(
+                        default=config_entry.data.get(
                             CONF_ENABLE_TEMPERATURES, True
                         ),
                     ): bool,
                     vol.Optional(
                         CONF_ENABLE_EVENTS,
-                        default=self.config_entry.data.get(CONF_ENABLE_EVENTS, True),
+                        default=config_entry.data.get(CONF_ENABLE_EVENTS, True),
                     ): bool,
                 }
             ),
