@@ -51,7 +51,8 @@ class MaisonProtegeeAPI:
                 allow_redirects=True,
             ) as response:
                 final_url = str(response.url)
-                cookies = self.session.cookie_jar.filter_cookies(BASE_URL)
+                from yarl import URL
+                cookies = self.session.cookie_jar.filter_cookies(URL(BASE_URL))
                 
                 _LOGGER.debug(
                     "Login response: status=%s, final_url=%s, cookies=%s",
