@@ -30,10 +30,11 @@ async def async_setup_entry(
     coordinator = MaisonProtegeeCoordinator(hass, api)
     await coordinator.async_config_entry_first_refresh()
 
-    sensors = []
-    status_data = coordinator.data.get("sensors", {})
+    sensors_data = coordinator.data.get("sensors", {})
+    _LOGGER.debug("Sensor setup: sensors data = %s", sensors_data)
     
-    for sensor_id, sensor_info in status_data.items():
+    sensors = []
+    for sensor_id, sensor_info in sensors_data.items():
         sensors.append(
             MaisonProtegeeSensor(
                 coordinator,
@@ -44,6 +45,7 @@ async def async_setup_entry(
             )
         )
 
+    _LOGGER.info("Setting up %d sensor entities: %s", len(sensors), [s._attr_name for s in sensors])
     async_add_entities(sensors)
 
 
@@ -58,9 +60,12 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
         self.api = api
 
     async def _async_update_data(self) -> dict[str, Any]:
+        _LOGGER.debug("Updating sensor coordinator data")
         status = await self.api.async_get_status()
         if status is None:
+            _LOGGER.warning("Failed to get status, returning empty sensors")
             return {"sensors": {}}
+        _LOGGER.debug("Status retrieved: %s", status)
         return status
 
 

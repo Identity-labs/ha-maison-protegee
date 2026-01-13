@@ -87,8 +87,11 @@ class MaisonProtegeeAPI:
             raise
 
     async def async_get_status(self) -> dict[str, Any] | None:
+        _LOGGER.debug("Getting status, authenticated: %s", self._authenticated)
         if not self._authenticated:
+            _LOGGER.info("Not authenticated, authenticating...")
             if not await self.async_authenticate():
+                _LOGGER.error("Authentication failed, cannot get status")
                 return None
 
         try:
@@ -96,12 +99,14 @@ class MaisonProtegeeAPI:
                 "User-Agent": "Mozilla/5.0 (compatible; HomeAssistant)",
             }
 
+            _LOGGER.debug("Fetching status from %s", STATUS_URL)
             async with self.session.get(
                 STATUS_URL,
                 headers=headers,
                 timeout=self._timeout,
                 allow_redirects=False,
             ) as response:
+                _LOGGER.debug("Status response: %s", response.status)
                 if response.status == 302:
                     _LOGGER.warning("Received 302 redirect, authentication required")
                     self._authenticated = False
@@ -137,9 +142,12 @@ class MaisonProtegeeAPI:
                 
                 response.raise_for_status()
                 html = await response.text()
-                return self._parse_status_html(html)
+                _LOGGER.debug("HTML response length: %d", len(html))
+                parsed_data = self._parse_status_html(html)
+                _LOGGER.debug("Parsed status data: %s", parsed_data)
+                return parsed_data
         except Exception as err:
-            _LOGGER.error("Failed to get status: %s", err)
+            _LOGGER.error("Failed to get status: %s", err, exc_info=True)
             self._authenticated = False
             return None
 

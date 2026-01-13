@@ -30,12 +30,20 @@ async def async_setup_entry(
     coordinator = MaisonProtegeeCoordinator(hass, api)
     await coordinator.async_config_entry_first_refresh()
 
-    async_add_entities(
-        [
-            MaisonProtegeeSwitch(coordinator, entry.entry_id, entity_id, entity_data.get("name", entity_id))
-            for entity_id, entity_data in coordinator.data.get("entities", {}).items()
-        ]
-    )
+    entities_data = coordinator.data.get("entities", {})
+    _LOGGER.debug("Switch setup: entities data = %s", entities_data)
+    
+    if not entities_data:
+        _LOGGER.warning("No entities found in coordinator data, creating default alarm switch")
+        entities_data = {"alarm": {"name": "Alarme", "state": False, "status_text": "Unknown"}}
+
+    entities = [
+        MaisonProtegeeSwitch(coordinator, entry.entry_id, entity_id, entity_data.get("name", entity_id))
+        for entity_id, entity_data in entities_data.items()
+    ]
+    
+    _LOGGER.info("Setting up %d switch entities: %s", len(entities), [e._attr_name for e in entities])
+    async_add_entities(entities)
 
 
 class MaisonProtegeeCoordinator(DataUpdateCoordinator):
@@ -49,9 +57,12 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
         self.api = api
 
     async def _async_update_data(self) -> dict[str, Any]:
+        _LOGGER.debug("Updating switch coordinator data")
         status = await self.api.async_get_status()
         if status is None:
+            _LOGGER.warning("Failed to get status, returning empty entities")
             return {"entities": {}}
+        _LOGGER.debug("Status retrieved: %s", status)
         return status
 
 
