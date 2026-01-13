@@ -11,7 +11,7 @@ from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import FlowResult
 
 from .api import MaisonProtegeeAPI
-from .const import DOMAIN
+from .const import CONF_ENABLE_EVENTS, CONF_ENABLE_TEMPERATURES, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +19,8 @@ DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_USERNAME): str,
         vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_ENABLE_TEMPERATURES, default=True): bool,
+        vol.Optional(CONF_ENABLE_EVENTS, default=True): bool,
     }
 )
 

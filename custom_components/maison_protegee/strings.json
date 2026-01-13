@@ -6,7 +6,9 @@
         "description": "Configure your Maison Protegee integration",
         "data": {
           "username": "Username",
-          "password": "Password"
+          "password": "Password",
+          "enable_temperatures": "Enable temperature sensors",
+          "enable_events": "Enable event log sensor"
         }
       }
     },
