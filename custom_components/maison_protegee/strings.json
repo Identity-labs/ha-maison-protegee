@@ -11,7 +11,8 @@
       }
     },
     "error": {
-      "cannot_connect": "Unable to connect to Maison Protegee. Please check your credentials.",
+      "cannot_connect": "Unable to connect to Maison Protegee. Please check your network connection.",
+      "invalid_auth": "Invalid credentials. Please check your username and password.",
       "unknown": "Unexpected error occurred"
     },
     "abort": {

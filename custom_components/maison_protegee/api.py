@@ -53,10 +53,23 @@ class MaisonProtegeeAPI:
                 final_url = str(response.url)
                 cookies = self.session.cookie_jar.filter_cookies(BASE_URL)
                 
+                _LOGGER.debug(
+                    "Login response: status=%s, final_url=%s, cookies=%s",
+                    response.status,
+                    final_url,
+                    bool(cookies),
+                )
+                
                 if HOME_URL in final_url or final_url.endswith("/home.do"):
                     self._authenticated = True
                     _LOGGER.debug("Authentication successful, redirected to home.do, cookies set")
                     return True
+                
+                if response.status == 200:
+                    html = await response.text()
+                    if "identifiant" in html.lower() or "mot de passe" in html.lower():
+                        _LOGGER.warning("Authentication failed: Invalid credentials")
+                        return False
                 
                 _LOGGER.warning(
                     "Authentication failed: status %s, final URL: %s, cookies: %s",
@@ -65,9 +78,12 @@ class MaisonProtegeeAPI:
                     bool(cookies),
                 )
                 return False
+        except aiohttp.ClientError as err:
+            _LOGGER.error("Network error during authentication: %s", err)
+            raise
         except Exception as err:
-            _LOGGER.error("Authentication failed: %s", err)
-            return False
+            _LOGGER.error("Unexpected error during authentication: %s", err)
+            raise
 
     async def async_get_status(self) -> dict[str, Any] | None:
         if not self._authenticated:

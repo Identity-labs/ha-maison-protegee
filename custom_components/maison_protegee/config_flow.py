@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 
 from homeassistant import config_entries
@@ -31,6 +32,9 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            await self.async_set_unique_id(user_input[CONF_USERNAME])
+            self._abort_if_unique_id_configured()
+
             try:
                 api = MaisonProtegeeAPI(
                     user_input[CONF_USERNAME],
@@ -38,14 +42,18 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self.hass.helpers.aiohttp_client.async_get_clientsession(),
                 )
 
-                if await api.async_authenticate():
+                auth_result = await api.async_authenticate()
+                if auth_result:
                     return self.async_create_entry(
                         title=user_input[CONF_USERNAME],
                         data=user_input,
                     )
+                errors["base"] = "invalid_auth"
+            except aiohttp.ClientError as err:
+                _LOGGER.exception("Connection error during authentication: %s", err)
                 errors["base"] = "cannot_connect"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
+            except Exception as err:
+                _LOGGER.exception("Unexpected exception during authentication: %s", err)
                 errors["base"] = "unknown"
 
         return self.async_show_form(
