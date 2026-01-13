@@ -16,6 +16,7 @@ HOME_URL = f"{BASE_URL}/home.do"
 STATUS_URL = f"{BASE_URL}/equipements/status/showBloc.do"
 TEMPERATURES_URL = f"{BASE_URL}/equipements/temperatures/showTab.do"
 LOGS_URL = f"{BASE_URL}/equipements/logs/showTable.do"
+LOGOUT_URL = f"{BASE_URL}/disconnect.do"
 
 
 class MaisonProtegeeAPI:
@@ -536,4 +537,27 @@ class MaisonProtegeeAPI:
                 _LOGGER.debug("Found event: %s", event)
 
         return events
+
+    async def async_logout(self) -> None:
+        """Logout from Maison Protegee."""
+        if not self._authenticated:
+            return
+
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (compatible; HomeAssistant)",
+            }
+
+            _LOGGER.debug("Logging out from %s", LOGOUT_URL)
+            async with self.session.get(
+                LOGOUT_URL,
+                headers=headers,
+                timeout=self._timeout,
+                allow_redirects=True,
+            ) as response:
+                _LOGGER.debug("Logout response: %s", response.status)
+                self._authenticated = False
+        except Exception as err:
+            _LOGGER.warning("Failed to logout: %s", err)
+            self._authenticated = False
 
