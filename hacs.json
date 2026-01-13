@@ -1,0 +1,7 @@
+{
+  "name": "Maison Protegee",
+  "render_readme": true,
+  "domains": ["switch", "sensor"],
+  "iot_class": "Local Polling"
+}
+
