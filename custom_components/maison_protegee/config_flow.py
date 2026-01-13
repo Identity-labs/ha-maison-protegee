@@ -35,15 +35,17 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(user_input[CONF_USERNAME])
             self._abort_if_unique_id_configured()
 
+            session = aiohttp.ClientSession()
             try:
                 api = MaisonProtegeeAPI(
                     user_input[CONF_USERNAME],
                     user_input[CONF_PASSWORD],
-                    self.hass.helpers.aiohttp_client.async_get_clientsession(),
+                    session,
                 )
 
                 auth_result = await api.async_authenticate()
                 if auth_result:
+                    await session.close()
                     return self.async_create_entry(
                         title=user_input[CONF_USERNAME],
                         data=user_input,
@@ -55,6 +57,8 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception as err:
                 _LOGGER.exception("Unexpected exception during authentication: %s", err)
                 errors["base"] = "unknown"
+            finally:
+                await session.close()
 
         return self.async_show_form(
             step_id="user",
