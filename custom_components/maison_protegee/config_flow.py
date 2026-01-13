@@ -24,9 +24,25 @@ DATA_SCHEMA = vol.Schema(
     }
 )
 
+OPTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(CONF_USERNAME): str,
+        vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_ENABLE_TEMPERATURES, default=True): bool,
+        vol.Optional(CONF_ENABLE_EVENTS, default=True): bool,
+    }
+)
+
 
 class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+
+    @staticmethod
+    async def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> MaisonProtegeeOptionsFlowHandler:
+        """Get the options flow for this handler."""
+        return MaisonProtegeeOptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -65,6 +81,79 @@ class MaisonProtegeeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reauthorization flow."""
+        return await self.async_step_user(user_input)
+
+
+class MaisonProtegeeOptionsFlowHandler(config_entries.OptionsFlow):
+    """Handle options flow for Maison Protegee."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Manage the options."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            session = aiohttp.ClientSession()
+            try:
+                api = MaisonProtegeeAPI(
+                    user_input[CONF_USERNAME],
+                    user_input[CONF_PASSWORD],
+                    session,
+                )
+
+                auth_result = await api.async_authenticate()
+                if auth_result:
+                    await session.close()
+                    hass = self.hass
+                    hass.config_entries.async_update_entry(
+                        self.config_entry,
+                        data=user_input,
+                    )
+                    await hass.config_entries.async_reload(self.config_entry.entry_id)
+                    return self.async_create_entry(title="", data={})
+                errors["base"] = "invalid_auth"
+            except aiohttp.ClientError as err:
+                _LOGGER.exception("Connection error during authentication: %s", err)
+                errors["base"] = "cannot_connect"
+            except Exception as err:
+                _LOGGER.exception("Unexpected exception during authentication: %s", err)
+                errors["base"] = "unknown"
+            finally:
+                await session.close()
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_USERNAME,
+                        default=self.config_entry.data.get(CONF_USERNAME),
+                    ): str,
+                    vol.Required(CONF_PASSWORD): str,
+                    vol.Optional(
+                        CONF_ENABLE_TEMPERATURES,
+                        default=self.config_entry.data.get(
+                            CONF_ENABLE_TEMPERATURES, True
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_ENABLE_EVENTS,
+                        default=self.config_entry.data.get(CONF_ENABLE_EVENTS, True),
+                    ): bool,
+                }
+            ),
             errors=errors,
         )
 
