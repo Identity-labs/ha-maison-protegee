@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -31,8 +32,26 @@ class MaisonProtegeeAPI:
         self.session = session
         self._timeout = aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)
         self._authenticated = False
+        self._last_auth_failure_time: datetime | None = None
+        self._auth_retry_delay = timedelta(minutes=3)
+
+    def _should_retry_auth(self) -> bool:
+        """Check if enough time has passed since last auth failure to retry."""
+        if self._last_auth_failure_time is None:
+            return True
+        
+        time_since_failure = datetime.now() - self._last_auth_failure_time
+        return time_since_failure >= self._auth_retry_delay
 
     async def async_authenticate(self) -> bool:
+        if not self._should_retry_auth():
+            time_remaining = self._auth_retry_delay - (datetime.now() - self._last_auth_failure_time)
+            _LOGGER.warning(
+                "Authentication failed recently, waiting %d seconds before retry",
+                int(time_remaining.total_seconds())
+            )
+            return False
+
         try:
             login_data = {
                 "id": self.username,
@@ -66,6 +85,7 @@ class MaisonProtegeeAPI:
                 
                 if HOME_URL in final_url or final_url.endswith("/home.do"):
                     self._authenticated = True
+                    self._last_auth_failure_time = None
                     _LOGGER.debug("Authentication successful, redirected to home.do, cookies set")
                     return True
                 
@@ -73,6 +93,7 @@ class MaisonProtegeeAPI:
                     html = await response.text()
                     if "identifiant" in html.lower() or "mot de passe" in html.lower():
                         _LOGGER.warning("Authentication failed: Invalid credentials")
+                        self._last_auth_failure_time = datetime.now()
                         return False
                 
                 _LOGGER.warning(
@@ -81,12 +102,15 @@ class MaisonProtegeeAPI:
                     final_url,
                     bool(cookies),
                 )
+                self._last_auth_failure_time = datetime.now()
                 return False
         except aiohttp.ClientError as err:
             _LOGGER.error("Network error during authentication: %s", err)
+            self._last_auth_failure_time = datetime.now()
             raise
         except Exception as err:
             _LOGGER.error("Unexpected error during authentication: %s", err)
+            self._last_auth_failure_time = datetime.now()
             raise
 
     async def async_get_status(self) -> dict[str, Any] | None:
@@ -114,6 +138,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Received 302 redirect, authentication required")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         STATUS_URL,
@@ -132,6 +157,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Authentication expired, re-authenticating")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         STATUS_URL,
@@ -305,6 +331,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Received 302 redirect, authentication required")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         TEMPERATURES_URL,
@@ -323,6 +350,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Authentication expired, re-authenticating")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         TEMPERATURES_URL,
@@ -441,6 +469,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Received 302 redirect, authentication required")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         LOGS_URL,
@@ -460,6 +489,7 @@ class MaisonProtegeeAPI:
                     _LOGGER.warning("Authentication expired, re-authenticating")
                     self._authenticated = False
                     if not await self.async_authenticate():
+                        _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
                     async with self.session.get(
                         LOGS_URL,
