@@ -33,6 +33,7 @@ class MaisonProtegeeAPI:
         self._timeout = aiohttp.ClientTimeout(total=DEFAULT_TIMEOUT)
         self._authenticated = False
         self._last_auth_failure_time: datetime | None = None
+        self._last_successful_auth_time: datetime | None = None
         self._auth_retry_delay = timedelta(minutes=3)
 
     def _should_retry_auth(self) -> bool:
@@ -86,6 +87,7 @@ class MaisonProtegeeAPI:
                 if HOME_URL in final_url or final_url.endswith("/home.do"):
                     self._authenticated = True
                     self._last_auth_failure_time = None
+                    self._last_successful_auth_time = datetime.now()
                     _LOGGER.debug("Authentication successful, redirected to home.do, cookies set")
                     return True
                 
@@ -569,6 +571,10 @@ class MaisonProtegeeAPI:
                 _LOGGER.debug("Found event: %s", event)
 
         return events
+
+    def get_last_successful_auth_time(self) -> datetime | None:
+        """Get the timestamp of the last successful authentication."""
+        return self._last_successful_auth_time
 
     async def async_logout(self) -> None:
         """Logout from Maison Protegee."""

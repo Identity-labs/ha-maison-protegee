@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -58,6 +58,11 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=30),
         )
         self.api = api
+        self._last_successful_update_time: datetime | None = None
+
+    def get_last_successful_update_time(self) -> datetime | None:
+        """Get the timestamp of the last successful update."""
+        return self._last_successful_update_time
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating switch coordinator data")
@@ -67,6 +72,7 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Failed to get status, returning empty entities")
                 return {"entities": {}}
             _LOGGER.debug("Status retrieved: %s", status)
+            self._last_successful_update_time = datetime.now()
             return status
         except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
             _LOGGER.warning("Timeout while getting status: %s", err)
@@ -106,4 +112,21 @@ class MaisonProtegeeSwitch(CoordinatorEntity, SwitchEntity):
         api: MaisonProtegeeAPI = self.coordinator.api
         if await api.async_set_status("disarm"):
             await self.coordinator.async_request_refresh()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        attrs: dict[str, Any] = {}
+        
+        if hasattr(self.coordinator, "get_last_successful_update_time"):
+            last_update = self.coordinator.get_last_successful_update_time()
+            if last_update:
+                attrs["last_successful_update"] = last_update.isoformat()
+        
+        if hasattr(self.coordinator, "api") and hasattr(self.coordinator.api, "get_last_successful_auth_time"):
+            last_auth = self.coordinator.api.get_last_successful_auth_time()
+            if last_auth:
+                attrs["last_successful_auth"] = last_auth.isoformat()
+        
+        return attrs
 

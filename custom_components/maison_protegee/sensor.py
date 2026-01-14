@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 import logging
 from typing import Any
 
@@ -99,6 +99,11 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=30),
         )
         self.api = api
+        self._last_successful_update_time: datetime | None = None
+
+    def get_last_successful_update_time(self) -> datetime | None:
+        """Get the timestamp of the last successful update."""
+        return self._last_successful_update_time
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating sensor coordinator data")
@@ -108,6 +113,7 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Failed to get status, returning empty sensors")
                 return {"sensors": {}}
             _LOGGER.debug("Status retrieved: %s", status)
+            self._last_successful_update_time = datetime.now()
             return status
         except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
             _LOGGER.warning("Timeout while getting status: %s", err)
@@ -126,6 +132,11 @@ class MaisonProtegeeTemperatureCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=600),
         )
         self.api = api
+        self._last_successful_update_time: datetime | None = None
+
+    def get_last_successful_update_time(self) -> datetime | None:
+        """Get the timestamp of the last successful update."""
+        return self._last_successful_update_time
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating temperature coordinator data")
@@ -135,6 +146,7 @@ class MaisonProtegeeTemperatureCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Failed to get temperatures, returning empty dict")
                 return {}
             _LOGGER.debug("Temperatures retrieved: %s", temperatures)
+            self._last_successful_update_time = datetime.now()
             return temperatures
         except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
             _LOGGER.warning("Timeout while getting temperatures: %s", err)
@@ -154,6 +166,11 @@ class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
         )
         self.api = api
         self._last_processed_event_date: str | None = None
+        self._last_successful_update_time: datetime | None = None
+
+    def get_last_successful_update_time(self) -> datetime | None:
+        """Get the timestamp of the last successful update."""
+        return self._last_successful_update_time
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         _LOGGER.debug("Updating events coordinator data")
@@ -173,6 +190,7 @@ class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
                 if events:
                     self._last_processed_event_date = events[0].get("date")
                     self._fire_new_events(events)
+                self._last_successful_update_time = datetime.now()
                 return events
             
             new_events = []
@@ -187,10 +205,9 @@ class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
                 _LOGGER.info("Found %d new events", len(new_events))
                 self._last_processed_event_date = new_events[0].get("date")
                 self._fire_new_events(new_events)
-                return events
-            else:
-                _LOGGER.debug("No new events found")
-                return events
+            
+            self._last_successful_update_time = datetime.now()
+            return events
         except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
             _LOGGER.warning("Timeout while getting events: %s", err)
             return []
@@ -244,6 +261,23 @@ class MaisonProtegeeSensor(CoordinatorEntity, SensorEntity):
                 .get("value")
             )
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional state attributes."""
+        attrs: dict[str, Any] = {}
+        
+        if hasattr(self.coordinator, "get_last_successful_update_time"):
+            last_update = self.coordinator.get_last_successful_update_time()
+            if last_update:
+                attrs["last_successful_update"] = last_update.isoformat()
+        
+        if hasattr(self.coordinator, "api") and hasattr(self.coordinator.api, "get_last_successful_auth_time"):
+            last_auth = self.coordinator.api.get_last_successful_auth_time()
+            if last_auth:
+                attrs["last_successful_auth"] = last_auth.isoformat()
+        
+        return attrs
+
 
 class MaisonProtegeeEventSensor(CoordinatorEntity, SensorEntity):
     """Sensor for the latest alarm event."""
@@ -271,12 +305,25 @@ class MaisonProtegeeEventSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional state attributes."""
+        attrs: dict[str, Any] = {}
+        
         if isinstance(self.coordinator.data, list) and len(self.coordinator.data) > 0:
             latest = self.coordinator.data[0]
-            return {
+            attrs.update({
                 "event_type": latest.get("type", "unknown"),
                 "date": latest.get("date"),
                 "date_text": latest.get("date_text"),
-            }
-        return {}
+            })
+        
+        if hasattr(self.coordinator, "get_last_successful_update_time"):
+            last_update = self.coordinator.get_last_successful_update_time()
+            if last_update:
+                attrs["last_successful_update"] = last_update.isoformat()
+        
+        if hasattr(self.coordinator, "api") and hasattr(self.coordinator.api, "get_last_successful_auth_time"):
+            last_auth = self.coordinator.api.get_last_successful_auth_time()
+            if last_auth:
+                attrs["last_successful_auth"] = last_auth.isoformat()
+        
+        return attrs
 
