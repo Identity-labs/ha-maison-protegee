@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any
+
+import aiohttp
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -58,12 +61,19 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating switch coordinator data")
-        status = await self.api.async_get_status()
-        if status is None:
-            _LOGGER.warning("Failed to get status, returning empty entities")
+        try:
+            status = await self.api.async_get_status()
+            if status is None:
+                _LOGGER.warning("Failed to get status, returning empty entities")
+                return {"entities": {}}
+            _LOGGER.debug("Status retrieved: %s", status)
+            return status
+        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+            _LOGGER.warning("Timeout while getting status: %s", err)
             return {"entities": {}}
-        _LOGGER.debug("Status retrieved: %s", status)
-        return status
+        except Exception as err:
+            _LOGGER.error("Unexpected error updating switch coordinator: %s", err, exc_info=True)
+            return {"entities": {}}
 
 
 class MaisonProtegeeSwitch(CoordinatorEntity, SwitchEntity):

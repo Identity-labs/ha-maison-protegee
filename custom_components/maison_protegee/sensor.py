@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 from typing import Any
+
+import aiohttp
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
@@ -99,12 +102,19 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating sensor coordinator data")
-        status = await self.api.async_get_status()
-        if status is None:
-            _LOGGER.warning("Failed to get status, returning empty sensors")
+        try:
+            status = await self.api.async_get_status()
+            if status is None:
+                _LOGGER.warning("Failed to get status, returning empty sensors")
+                return {"sensors": {}}
+            _LOGGER.debug("Status retrieved: %s", status)
+            return status
+        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+            _LOGGER.warning("Timeout while getting status: %s", err)
             return {"sensors": {}}
-        _LOGGER.debug("Status retrieved: %s", status)
-        return status
+        except Exception as err:
+            _LOGGER.error("Unexpected error updating sensor coordinator: %s", err, exc_info=True)
+            return {"sensors": {}}
 
 
 class MaisonProtegeeTemperatureCoordinator(DataUpdateCoordinator):
@@ -113,18 +123,25 @@ class MaisonProtegeeTemperatureCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=f"{DOMAIN}_temperatures",
-            update_interval=timedelta(seconds=300),
+            update_interval=timedelta(seconds=600),
         )
         self.api = api
 
     async def _async_update_data(self) -> dict[str, Any]:
         _LOGGER.debug("Updating temperature coordinator data")
-        temperatures = await self.api.async_get_temperatures()
-        if temperatures is None:
-            _LOGGER.warning("Failed to get temperatures, returning empty dict")
+        try:
+            temperatures = await self.api.async_get_temperatures()
+            if temperatures is None:
+                _LOGGER.warning("Failed to get temperatures, returning empty dict")
+                return {}
+            _LOGGER.debug("Temperatures retrieved: %s", temperatures)
+            return temperatures
+        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+            _LOGGER.warning("Timeout while getting temperatures: %s", err)
             return {}
-        _LOGGER.debug("Temperatures retrieved: %s", temperatures)
-        return temperatures
+        except Exception as err:
+            _LOGGER.error("Unexpected error updating temperature coordinator: %s", err, exc_info=True)
+            return {}
 
 
 class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
@@ -133,46 +150,53 @@ class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=f"{DOMAIN}_events",
-            update_interval=timedelta(seconds=600),
+            update_interval=timedelta(seconds=60),
         )
         self.api = api
         self._last_processed_event_date: str | None = None
 
     async def _async_update_data(self) -> list[dict[str, Any]]:
         _LOGGER.debug("Updating events coordinator data")
-        events = await self.api.async_get_events()
-        if events is None:
-            _LOGGER.warning("Failed to get events, returning empty list")
-            return []
-        
-        _LOGGER.debug("Events retrieved: %d events", len(events))
-        
-        if not events:
-            return []
-        
-        if self._last_processed_event_date is None:
-            _LOGGER.debug("First fetch, processing all events")
-            if events:
-                self._last_processed_event_date = events[0].get("date")
-                self._fire_new_events(events)
-            return events
-        
-        new_events = []
-        for event in events:
-            event_date = event.get("date")
-            if event_date and event_date > self._last_processed_event_date:
-                new_events.append(event)
+        try:
+            events = await self.api.async_get_events()
+            if events is None:
+                _LOGGER.warning("Failed to get events, returning empty list")
+                return []
+            
+            _LOGGER.debug("Events retrieved: %d events", len(events))
+            
+            if not events:
+                return []
+            
+            if self._last_processed_event_date is None:
+                _LOGGER.debug("First fetch, processing all events")
+                if events:
+                    self._last_processed_event_date = events[0].get("date")
+                    self._fire_new_events(events)
+                return events
+            
+            new_events = []
+            for event in events:
+                event_date = event.get("date")
+                if event_date and event_date > self._last_processed_event_date:
+                    new_events.append(event)
+                else:
+                    break
+            
+            if new_events:
+                _LOGGER.info("Found %d new events", len(new_events))
+                self._last_processed_event_date = new_events[0].get("date")
+                self._fire_new_events(new_events)
+                return events
             else:
-                break
-        
-        if new_events:
-            _LOGGER.info("Found %d new events", len(new_events))
-            self._last_processed_event_date = new_events[0].get("date")
-            self._fire_new_events(new_events)
-            return events
-        else:
-            _LOGGER.debug("No new events found")
-            return events
+                _LOGGER.debug("No new events found")
+                return events
+        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+            _LOGGER.warning("Timeout while getting events: %s", err)
+            return []
+        except Exception as err:
+            _LOGGER.error("Unexpected error updating events coordinator: %s", err, exc_info=True)
+            return []
 
     def _fire_new_events(self, new_events: list[dict[str, Any]]) -> None:
         """Fire Home Assistant events for new alarm events."""
