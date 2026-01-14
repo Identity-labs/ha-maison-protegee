@@ -115,7 +115,7 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Status retrieved: %s", status)
             self._last_successful_update_time = datetime.now()
             return status
-        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Timeout while getting status: %s", err)
             return {"sensors": {}}
         except Exception as err:
@@ -148,7 +148,7 @@ class MaisonProtegeeTemperatureCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Temperatures retrieved: %s", temperatures)
             self._last_successful_update_time = datetime.now()
             return temperatures
-        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Timeout while getting temperatures: %s", err)
             return {}
         except Exception as err:
@@ -208,7 +208,7 @@ class MaisonProtegeeEventsCoordinator(DataUpdateCoordinator):
             
             self._last_successful_update_time = datetime.now()
             return events
-        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Timeout while getting events: %s", err)
             return []
         except Exception as err:

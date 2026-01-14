@@ -74,7 +74,7 @@ class MaisonProtegeeCoordinator(DataUpdateCoordinator):
             _LOGGER.debug("Status retrieved: %s", status)
             self._last_successful_update_time = datetime.now()
             return status
-        except (asyncio.TimeoutError, aiohttp.ClientTimeout) as err:
+        except asyncio.TimeoutError as err:
             _LOGGER.warning("Timeout while getting status: %s", err)
             return {"entities": {}}
         except Exception as err:
