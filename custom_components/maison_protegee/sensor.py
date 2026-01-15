@@ -268,13 +268,11 @@ class MaisonProtegeeSensor(CoordinatorEntity, SensorEntity):
         
         if hasattr(self.coordinator, "get_last_successful_update_time"):
             last_update = self.coordinator.get_last_successful_update_time()
-            if last_update:
-                attrs["last_successful_update"] = last_update.isoformat()
+            attrs["last_successful_update"] = last_update.isoformat() if last_update else "Never"
         
         if hasattr(self.coordinator, "api") and hasattr(self.coordinator.api, "get_last_successful_auth_time"):
             last_auth = self.coordinator.api.get_last_successful_auth_time()
-            if last_auth:
-                attrs["last_successful_auth"] = last_auth.isoformat()
+            attrs["last_successful_auth"] = last_auth.isoformat() if last_auth else "Never"
         
         return attrs
 
@@ -317,13 +315,11 @@ class MaisonProtegeeEventSensor(CoordinatorEntity, SensorEntity):
         
         if hasattr(self.coordinator, "get_last_successful_update_time"):
             last_update = self.coordinator.get_last_successful_update_time()
-            if last_update:
-                attrs["last_successful_update"] = last_update.isoformat()
+            attrs["last_successful_update"] = last_update.isoformat() if last_update else "Never"
         
         if hasattr(self.coordinator, "api") and hasattr(self.coordinator.api, "get_last_successful_auth_time"):
             last_auth = self.coordinator.api.get_last_successful_auth_time()
-            if last_auth:
-                attrs["last_successful_auth"] = last_auth.isoformat()
+            attrs["last_successful_auth"] = last_auth.isoformat() if last_auth else "Never"
         
         return attrs
 

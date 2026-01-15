@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -177,6 +178,10 @@ class MaisonProtegeeAPI:
                 parsed_data = self._parse_status_html(html)
                 _LOGGER.debug("Parsed status data: %s", parsed_data)
                 return parsed_data
+        except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
+            _LOGGER.warning("Timeout or connection error while getting status: %s", err)
+            self._authenticated = False
+            return None
         except Exception as err:
             _LOGGER.error("Failed to get status: %s", err, exc_info=True)
             self._authenticated = False
@@ -372,6 +377,10 @@ class MaisonProtegeeAPI:
                 parsed_data = self._parse_temperatures_html(html)
                 _LOGGER.debug("Parsed temperatures data: %s", parsed_data)
                 return parsed_data
+        except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
+            _LOGGER.warning("Timeout or connection error while getting temperatures: %s", err)
+            self._authenticated = False
+            return None
         except Exception as err:
             _LOGGER.error("Failed to get temperatures: %s", err, exc_info=True)
             self._authenticated = False
@@ -512,6 +521,10 @@ class MaisonProtegeeAPI:
                 parsed_data = self._parse_events_html(html)
                 _LOGGER.debug("Parsed events data: %d events", len(parsed_data) if parsed_data else 0)
                 return parsed_data
+        except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
+            _LOGGER.warning("Timeout or connection error while getting events: %s", err)
+            self._authenticated = False
+            return None
         except Exception as err:
             _LOGGER.error("Failed to get events: %s", err, exc_info=True)
             self._authenticated = False
