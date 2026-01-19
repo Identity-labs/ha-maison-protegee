@@ -67,6 +67,36 @@ This integration uses:
 - Home Assistant's config flow for setup
 - Coordinator pattern for data updates (polls every 30 seconds)
 
+### Local Testing
+
+You can test the API locally using the CLI tool:
+
+1. Install dependencies:
+   ```bash
+   pip install -r requirements-dev.txt
+   ```
+
+2. Run the test CLI:
+   ```bash
+   # Test authentication
+   python test_cli.py <username> <password> auth
+
+   # Get status
+   python test_cli.py <username> <password> status
+
+   # Arm the alarm
+   python test_cli.py <username> <password> arm
+
+   # Disarm the alarm
+   python test_cli.py <username> <password> disarm
+   ```
+
+The CLI will show detailed debug output including:
+- Authentication status
+- Cookie information
+- Status data retrieved from the API
+- Success/failure of operations
+
 ## License
 
 MIT License

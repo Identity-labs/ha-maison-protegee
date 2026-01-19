@@ -45,6 +45,15 @@ class MaisonProtegeeAPI:
         time_since_failure = datetime.now() - self._last_auth_failure_time
         return time_since_failure >= self._auth_retry_delay
 
+    def _clear_session(self) -> None:
+        """Clear cookies and invalidate session."""
+        try:
+            self.session.cookie_jar.clear()
+        except Exception as err:
+            _LOGGER.debug("Error clearing cookies (non-critical): %s", err)
+        self._authenticated = False
+        _LOGGER.debug("Session cleared, cookies removed")
+
     async def async_authenticate(self) -> bool:
         if not self._should_retry_auth():
             time_remaining = self._auth_retry_delay - (datetime.now() - self._last_auth_failure_time)
@@ -137,9 +146,14 @@ class MaisonProtegeeAPI:
                 allow_redirects=False,
             ) as response:
                 _LOGGER.debug("Status response: %s", response.status)
+                if response.status == 404:
+                    _LOGGER.warning("Received 404, session invalidated, clearing cookies")
+                    self._clear_session()
+                    return None
+                
                 if response.status == 302:
                     _LOGGER.warning("Received 302 redirect, authentication required")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -154,11 +168,15 @@ class MaisonProtegeeAPI:
                             return None
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_status_html(html)
                 
                 if response.status == 401 or response.status == 403:
                     _LOGGER.warning("Authentication expired, re-authenticating")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -170,14 +188,34 @@ class MaisonProtegeeAPI:
                     ) as retry_response:
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_status_html(html)
                 
                 response.raise_for_status()
                 html = await response.text()
                 _LOGGER.debug("HTML response length: %d", len(html))
+                if not html or len(html.strip()) == 0:
+                    _LOGGER.warning("Empty HTML response, session may be invalid")
+                    self._clear_session()
+                    return None
                 parsed_data = self._parse_status_html(html)
+                if not parsed_data.get("entities") and not parsed_data.get("sensors"):
+                    _LOGGER.warning("No data parsed from HTML, session may be invalid")
+                    self._clear_session()
+                    return None
                 _LOGGER.debug("Parsed status data: %s", parsed_data)
                 return parsed_data
+        except aiohttp.ClientResponseError as err:
+            if err.status == 404:
+                _LOGGER.warning("404 error while getting status, session invalidated: %s", err)
+                self._clear_session()
+            else:
+                _LOGGER.warning("HTTP error while getting status: %s", err)
+                self._authenticated = False
+            return None
         except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
             _LOGGER.warning("Timeout or connection error while getting status: %s", err)
             self._authenticated = False
@@ -336,9 +374,14 @@ class MaisonProtegeeAPI:
             ) as response:
                 _LOGGER.debug("Temperatures response: %s", response.status)
                 
+                if response.status == 404:
+                    _LOGGER.warning("Received 404, session invalidated, clearing cookies")
+                    self._clear_session()
+                    return None
+                
                 if response.status == 302:
                     _LOGGER.warning("Received 302 redirect, authentication required")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -353,11 +396,15 @@ class MaisonProtegeeAPI:
                             return None
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_temperatures_html(html)
 
                 if response.status == 401 or response.status == 403:
                     _LOGGER.warning("Authentication expired, re-authenticating")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -369,14 +416,34 @@ class MaisonProtegeeAPI:
                     ) as retry_response:
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_temperatures_html(html)
 
                 response.raise_for_status()
                 html = await response.text()
                 _LOGGER.debug("Temperatures HTML response length: %d", len(html))
+                if not html or len(html.strip()) == 0:
+                    _LOGGER.warning("Empty HTML response, session may be invalid")
+                    self._clear_session()
+                    return None
                 parsed_data = self._parse_temperatures_html(html)
+                if not parsed_data:
+                    _LOGGER.warning("No temperature data parsed from HTML, session may be invalid")
+                    self._clear_session()
+                    return None
                 _LOGGER.debug("Parsed temperatures data: %s", parsed_data)
                 return parsed_data
+        except aiohttp.ClientResponseError as err:
+            if err.status == 404:
+                _LOGGER.warning("404 error while getting temperatures, session invalidated: %s", err)
+                self._clear_session()
+            else:
+                _LOGGER.warning("HTTP error while getting temperatures: %s", err)
+                self._authenticated = False
+            return None
         except (asyncio.TimeoutError, TimeoutError, aiohttp.ClientError) as err:
             _LOGGER.warning("Timeout or connection error while getting temperatures: %s", err)
             self._authenticated = False
@@ -478,9 +545,14 @@ class MaisonProtegeeAPI:
             ) as response:
                 _LOGGER.debug("Events response: %s", response.status)
                 
+                if response.status == 404:
+                    _LOGGER.warning("Received 404, session invalidated, clearing cookies")
+                    self._clear_session()
+                    return None
+                
                 if response.status == 302:
                     _LOGGER.warning("Received 302 redirect, authentication required")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -496,11 +568,15 @@ class MaisonProtegeeAPI:
                             return None
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_events_html(html)
 
                 if response.status == 401 or response.status == 403:
                     _LOGGER.warning("Authentication expired, re-authenticating")
-                    self._authenticated = False
+                    self._clear_session()
                     if not await self.async_authenticate():
                         _LOGGER.warning("Authentication retry blocked by rate limit, returning None")
                         return None
@@ -513,11 +589,19 @@ class MaisonProtegeeAPI:
                     ) as retry_response:
                         retry_response.raise_for_status()
                         html = await retry_response.text()
+                        if not html or len(html.strip()) == 0:
+                            _LOGGER.warning("Empty HTML response, session may be invalid")
+                            self._clear_session()
+                            return None
                         return self._parse_events_html(html)
 
                 response.raise_for_status()
                 html = await response.text()
                 _LOGGER.debug("Events HTML response length: %d", len(html))
+                if not html or len(html.strip()) == 0:
+                    _LOGGER.warning("Empty HTML response, session may be invalid")
+                    self._clear_session()
+                    return None
                 parsed_data = self._parse_events_html(html)
                 _LOGGER.debug("Parsed events data: %d events", len(parsed_data) if parsed_data else 0)
                 return parsed_data
