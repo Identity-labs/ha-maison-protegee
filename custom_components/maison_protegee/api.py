@@ -35,7 +35,7 @@ class MaisonProtegeeAPI:
         self._authenticated = False
         self._last_auth_failure_time: datetime | None = None
         self._last_successful_auth_time: datetime | None = None
-        self._auth_retry_delay = timedelta(minutes=3)
+        self._auth_retry_delay = timedelta(minutes=5)
 
     def _should_retry_auth(self) -> bool:
         """Check if enough time has passed since last auth failure to retry."""
@@ -103,9 +103,15 @@ class MaisonProtegeeAPI:
                 
                 if response.status == 200:
                     html = await response.text()
-                    if "identifiant" in html.lower() or "mot de passe" in html.lower():
-                        _LOGGER.warning("Authentication failed: Invalid credentials")
+                    html_lower = html.lower()
+                    
+                    if "session déjà ouverte" in html_lower or "session deja ouverte" in html_lower:
+                        _LOGGER.warning("Session already open detected, attempting to close existing session")
                         self._last_auth_failure_time = datetime.now()
+                        return False
+                    
+                    if "identifiant" in html_lower or "mot de passe" in html_lower:
+                        _LOGGER.warning("Authentication failed: Invalid credentials")
                         return False
                 
                 _LOGGER.warning(
@@ -114,7 +120,6 @@ class MaisonProtegeeAPI:
                     final_url,
                     bool(cookies),
                 )
-                self._last_auth_failure_time = datetime.now()
                 return False
         except aiohttp.ClientError as err:
             _LOGGER.error("Network error during authentication: %s", err)
@@ -673,9 +678,13 @@ class MaisonProtegeeAPI:
         """Get the timestamp of the last successful authentication."""
         return self._last_successful_auth_time
 
-    async def async_logout(self) -> None:
-        """Logout from Maison Protegee."""
-        if not self._authenticated:
+    async def async_logout(self, force: bool = False) -> None:
+        """Logout from Maison Protegee.
+        
+        Args:
+            force: If True, logout even if not authenticated (useful for closing server-side sessions)
+        """
+        if not self._authenticated and not force:
             return
 
         try:
